@@ -9,11 +9,11 @@ import (
 func TestBinary(t *testing.T) {
 	type packet struct {
 		Protocol uint16
-		Version  int8
-		Length   uint16 `binary:"big,sizeof=Cmd+Data+Padding+CRC"`
-		Cmd      uint8
+		Version  uint8
+		Length   uint16   `binary:"big,sizeof=Cmd+Data+Padding+CRC"`
+		Cmd      uint8    `binary:"size=1B"`
+		Padding  struct{} `binary:"size=7B"`
 		Data     []byte
-		Padding  struct{} `binary:"padding=2B"`
 		CRC      uint16
 	}
 

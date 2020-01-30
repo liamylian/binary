@@ -3,6 +3,8 @@ package binary
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -10,7 +12,7 @@ import (
 const (
 	tagItemKeyBigEndian    = "big"
 	tagItemKeyLittleEndian = "little"
-	tagItemKeyPadding      = "padding"
+	tagItemKeySize         = "size"
 	tagItemKeySizeof       = "sizeof"
 )
 
@@ -18,19 +20,35 @@ type tagItemEndian struct {
 	Endian binary.ByteOrder
 }
 
-type tagItemPadding struct {
+type tagItemSize struct {
 	Bytes int
 }
 
-func newTagItemPadding(value string) (*tagItemPadding, error) {
-	value = strings.TrimRight(value, "B")
-	value = strings.Replace(value, tagItemKeyPadding+"=", "", 1)
-	bytes, err := strconv.Atoi(value)
+func newTagItemSize(value string) (*tagItemSize, error) {
+	re := regexp.MustCompile(`size=(\d+)(B|W|DW|QW)`)
+	matches := re.FindStringSubmatch(value)
+	if len(matches) != 3 {
+		return nil, errors.New("binary: invalid size value")
+	}
+
+	num, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return nil, err
 	}
 
-	return &tagItemPadding{bytes}, nil
+	var bytes int
+	switch matches[2] {
+	case "B":
+		bytes = num
+	case "W":
+		bytes = 2 * num
+	case "DW":
+		bytes = 4 * num
+	case "QW":
+		bytes = 8 * num
+	}
+
+	return &tagItemSize{bytes}, nil
 }
 
 type tagItemSizeOf struct {
@@ -53,7 +71,7 @@ func newTagItemSizeOf(value string) (*tagItemSizeOf, error) {
 	return tagItem, nil
 }
 
-func getTagItems(tagValue string) (endian *tagItemEndian, padding *tagItemPadding, sizeof *tagItemSizeOf, err error) {
+func getTagItems(tagValue string) (endian *tagItemEndian, size *tagItemSize, sizeof *tagItemSizeOf, err error) {
 	itemValues := strings.Split(tagValue, ",")
 	for _, itemValue := range itemValues {
 		itemValue = strings.TrimSpace(itemValue)
@@ -65,20 +83,20 @@ func getTagItems(tagValue string) (endian *tagItemEndian, padding *tagItemPaddin
 			endian = &tagItemEndian{binary.BigEndian}
 		} else if itemValue == tagItemKeyLittleEndian {
 			endian = &tagItemEndian{binary.LittleEndian}
-		} else if strings.HasPrefix(itemValue, tagItemKeyPadding) {
-			tagItem, err := newTagItemPadding(itemValue)
+		} else if strings.HasPrefix(itemValue, tagItemKeySize+"=") {
+			tagItem, err := newTagItemSize(itemValue)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			padding = tagItem
-		} else if strings.HasPrefix(itemValue, tagItemKeySizeof) {
+			size = tagItem
+		} else if strings.HasPrefix(itemValue, tagItemKeySizeof+"=") {
 			tagItem, err := newTagItemSizeOf(itemValue)
 			if err != nil {
 				return nil, nil, nil, err
 			}
 			sizeof = tagItem
 		} else {
-			return nil, nil, nil, errors.New("invalid tag itemValue")
+			return nil, nil, nil, fmt.Errorf("invalid tag item: %s", itemValue)
 		}
 	}
 
