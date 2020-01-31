@@ -12,28 +12,23 @@ import (
 const (
 	tagItemKeyBigEndian    = "big"
 	tagItemKeyLittleEndian = "little"
-	tagItemKeySize         = "size"
-	tagItemKeySizeof       = "sizeof"
+	tagItemKeySize         = "tagSize"
+	tagItemKeySizeof       = "tagSizeof"
 )
 
-type tagItemEndian struct {
-	Endian binary.ByteOrder
-}
-
-type tagItemSize struct {
-	Bytes int
-}
-
-func newTagItemSize(value string) (*tagItemSize, error) {
-	re := regexp.MustCompile(`size=(\d+)(B|W|DW|QW)`)
+func getTagSize(value string) (uint, error) {
+	re := regexp.MustCompile(`tagSize=(\d+)(B|W|DW|QW)`)
 	matches := re.FindStringSubmatch(value)
 	if len(matches) != 3 {
-		return nil, errors.New("binary: invalid size value")
+		return 0, errors.New("binary: invalid field tag size value")
 	}
 
 	num, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return nil, err
+		return 0, err
+	}
+	if num < 0 {
+		return 0, errors.New("binary: tag size value, must equal or greater than 0")
 	}
 
 	var bytes int
@@ -47,32 +42,24 @@ func newTagItemSize(value string) (*tagItemSize, error) {
 	case "QW":
 		bytes = 8 * num
 	}
-
-	return &tagItemSize{bytes}, nil
+	return uint(bytes), nil
 }
 
-type tagItemSizeOf struct {
-	Fields []string
-}
-
-func newTagItemSizeOf(value string) (*tagItemSizeOf, error) {
-	tagItem := &tagItemSizeOf{}
-	fields := strings.Split(value, "+")
-	for _, field := range fields {
-		field := strings.TrimSpace(field)
+func getTagSizeOf(value string) (fieldNames []string, err error) {
+	names := strings.Split(value, "+")
+	for _, fieldName := range names {
+		field := strings.TrimSpace(fieldName)
 		if field != "" {
-			tagItem.Fields = append(tagItem.Fields, field)
+			fieldNames = append(fieldNames, field)
 		}
 	}
-	if len(tagItem.Fields) == 0 {
-		return nil, errors.New("tag item sizeof has no fields")
-	}
 
-	return tagItem, nil
+	return
 }
 
-func getTagItems(tagValue string) (endian *tagItemEndian, size *tagItemSize, sizeof *tagItemSizeOf, err error) {
+func getTagInfo(tagValue string) (endian binary.ByteOrder, size uint, sizeof []string, err error) {
 	itemValues := strings.Split(tagValue, ",")
+	// todo
 	for _, itemValue := range itemValues {
 		itemValue = strings.TrimSpace(itemValue)
 		if itemValue == "" {
@@ -80,24 +67,26 @@ func getTagItems(tagValue string) (endian *tagItemEndian, size *tagItemSize, siz
 		}
 
 		if itemValue == tagItemKeyBigEndian {
-			endian = &tagItemEndian{binary.BigEndian}
+			endian = binary.BigEndian
 		} else if itemValue == tagItemKeyLittleEndian {
-			endian = &tagItemEndian{binary.LittleEndian}
+			endian = binary.LittleEndian
 		} else if strings.HasPrefix(itemValue, tagItemKeySize+"=") {
-			tagItem, err := newTagItemSize(itemValue)
+			size, err = getTagSize(itemValue)
 			if err != nil {
-				return nil, nil, nil, err
+				return
 			}
-			size = tagItem
 		} else if strings.HasPrefix(itemValue, tagItemKeySizeof+"=") {
-			tagItem, err := newTagItemSizeOf(itemValue)
+			sizeof, err = getTagSizeOf(itemValue)
 			if err != nil {
-				return nil, nil, nil, err
+				return
 			}
-			sizeof = tagItem
 		} else {
-			return nil, nil, nil, fmt.Errorf("invalid tag item: %s", itemValue)
+			err = fmt.Errorf("invalid binary tag item: %s", itemValue)
+			return
 		}
+	}
+	if endian == nil {
+		endian = binary.BigEndian
 	}
 
 	return
