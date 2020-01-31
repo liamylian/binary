@@ -12,18 +12,18 @@ import (
 const (
 	tagItemKeyBigEndian    = "big"
 	tagItemKeyLittleEndian = "little"
-	tagItemKeySize         = "size"
+	tagItemKeyPadding      = "padding"
 	tagItemKeySizeof       = "sizeof"
 
-	reSize   = `^byteSize=(\d+)(B|W|DW|QW)$`
+	reSize   = `^padding=(\d+)(B|W|DW|QW)$`
 	reSizeof = `^sizeof=((\w+\+)*\w+)$`
 )
 
-func getTagSize(value string) (uint, error) {
+func getTagPadding(value string) (uint, error) {
 	re := regexp.MustCompile(reSize)
 	matches := re.FindStringSubmatch(value)
 	if len(matches) != 3 {
-		return 0, errors.New("binary: invalid field tag byteSize value")
+		return 0, errors.New("binary: invalid field tag padding value")
 	}
 
 	num, err := strconv.Atoi(matches[1])
@@ -31,7 +31,7 @@ func getTagSize(value string) (uint, error) {
 		return 0, err
 	}
 	if num < 0 {
-		return 0, errors.New("binary: tag byteSize value, must equal or greater than 0")
+		return 0, errors.New("binary: tag padding value, must equal or greater than 0")
 	}
 
 	var bytes int
@@ -79,8 +79,8 @@ func getTagInfo(value string) (endian binary.ByteOrder, size uint, sizeof []stri
 			endian = binary.BigEndian
 		} else if itemValue == tagItemKeyLittleEndian {
 			endian = binary.LittleEndian
-		} else if strings.HasPrefix(itemValue, tagItemKeySize+"=") {
-			size, err = getTagSize(itemValue)
+		} else if strings.HasPrefix(itemValue, tagItemKeyPadding+"=") {
+			size, err = getTagPadding(itemValue)
 			if err != nil {
 				return
 			}

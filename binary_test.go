@@ -12,7 +12,7 @@ func TestBinary(t *testing.T) {
 		Version  uint8
 		Length   uint16 `binary:"big,sizeof=Cmd+Data+Padding+CRC"`
 		Cmd      uint8
-		Padding  struct{} `binary:"size=1B"`
+		Padding  struct{} `binary:"padding=1B"`
 		Data     []byte
 		CRC      uint16
 	}

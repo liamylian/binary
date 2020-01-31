@@ -11,7 +11,7 @@ type fieldInfo struct {
 	tagEndian    binary.ByteOrder
 	tagSizeof    []string
 	tagSizeofVal uint
-	tagSize      uint
+	tagPadding   uint
 	typeSize     int
 	byteSize     uint
 	byteStart    uint
@@ -37,49 +37,48 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		fieldType := typElem.Field(i).Type
 		fieldVal := valElem.Field(i)
 		fieldName := field.Name
-		tagEndian, tagSize, tagSizeof, err := getTagInfo(field.Tag.Get("binary"))
+		tagEndian, tagPadding, tagSizeof, err := getTagInfo(field.Tag.Get("binary"))
 		if err != nil {
 			return nil, err
 		}
 
 		tagSizeofVal := 0
 		typeSize := 0
-		actualSize := uint(0)
+		byteSize := uint(0)
 		switch fieldType.Kind() {
 		case reflect.Bool, reflect.Float32, reflect.Float64, reflect.Array:
 			tagSizeof = nil // ignore tag sizeof
+			tagPadding = 0  // ignore padding
 			typeSize = sizeof(fieldType)
-			actualSize = uint(typeSize)
+			byteSize = uint(typeSize)
 		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			tagPadding = 0 // ignore padding
 			typeSize = sizeof(fieldType)
-			actualSize = uint(typeSize)
+			byteSize = uint(typeSize)
 			tagSizeofVal = int(fieldVal.Uint())
 		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			tagPadding = 0 // ignore padding
 			typeSize = sizeof(fieldType)
-			actualSize = uint(typeSize)
+			byteSize = uint(typeSize)
+			tagSizeofVal = int(fieldVal.Uint())
 			tagSizeofVal = int(fieldVal.Int())
 			if tagSizeofVal <= 0 {
 				return nil, errors.New("tag sizeof value < 0")
 			}
 		case reflect.Slice:
 			tagSizeof = nil // ignore tag sizeof
+			tagPadding = 0  // ignore padding
 			typeSize = -1   // unknown type size
-			actualSize = uint(sizeof(fieldType.Elem()) * fieldVal.Len())
+			byteSize = uint(sizeof(fieldType.Elem()) * fieldVal.Len())
 		case reflect.Struct:
-			tagSizeof = nil // ignore tag sizeof
 			if fieldType.NumField() > 0 {
 				return nil, errors.New("embedded none empty struct not supported")
 			}
+			tagSizeof = nil // ignore tag sizeof
+			typeSize = 0    // unknown type size
+			byteSize = 0
 		default:
 			return nil, errors.New("not supported kind")
-		}
-		byteSize := tagSize
-		if tagSize == 0 {
-			if typeSize > 0 {
-				byteSize = uint(typeSize)
-			} else {
-				byteSize = actualSize
-			}
 		}
 		byteStart := byteCursor
 		byteEnd := byteStart + byteSize
@@ -88,7 +87,7 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 			tagEndian:    tagEndian,
 			tagSizeof:    tagSizeof,
 			tagSizeofVal: uint(tagSizeofVal),
-			tagSize:      tagSize,
+			tagPadding:   tagPadding,
 			typeSize:     typeSize,
 			byteSize:     byteSize,
 			byteStart:    byteStart,

@@ -35,7 +35,7 @@ func Pack(v interface{}) ([]byte, error) {
 		if fieldValue.Kind() == reflect.Struct {
 			bytes = make([]byte, fieldInfo.byteSize)
 		} else {
-			bytes, err = pack(fieldValue, fieldInfo.tagEndian, fieldInfo.byteSize)
+			bytes, err = pack(fieldValue, fieldInfo.tagEndian)
 			if err != nil {
 				return nil, err
 			}
@@ -65,51 +65,34 @@ func Pack(v interface{}) ([]byte, error) {
 	return resultBytes, nil
 }
 
-func pack(v reflect.Value, endian binary.ByteOrder, size uint) ([]byte, error) {
-	switch v.Kind() {
-	case reflect.Bool,
-		reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Float32, reflect.Float64,
-		reflect.Array, reflect.Slice:
-		buffer := bytes.NewBuffer(nil)
-		if err := binary.Write(buffer, endian, v.Interface()); err != nil {
-			return nil, err
-		}
-		bytes := buffer.Bytes()
-		byteSize := uint(len(bytes))
-		if size == 0 {
-			return bytes, nil
-		} else if size > byteSize {
-			padding := make([]byte, size-byteSize, size)
-			return append(padding, bytes...), nil // todo endian problem
-		} else {
-			return bytes[byteSize-size:], nil
-		}
-	default:
-		return nil, errors.New("not supported kind")
+func pack(v reflect.Value, endian binary.ByteOrder) ([]byte, error) {
+	buffer := bytes.NewBuffer(nil)
+	if err := binary.Write(buffer, endian, v.Interface()); err != nil {
+		return nil, err
 	}
+	return buffer.Bytes(), nil
 }
 
 func Unpack(v interface{}, bytes []byte) error {
+	typ := reflect.TypeOf(v)
 	val := reflect.ValueOf(v)
 	if !(val.Kind() == reflect.Ptr && val.Elem().Kind() == reflect.Struct) {
 		return errors.New("not a pointer to struct")
 	}
 	valElem := val.Elem()
-
+	typElem := typ.Elem()
 	fieldInfoMap, err := getFieldInfo(v)
 	if err != nil {
 		return err
 	}
 
-	// check size
-	totalBytes := 0
-	for _, fieldInfo := range fieldInfoMap {
+	// solve size
+	numField := typElem.NumField()
+	for i := 0; i < numField; i++ {
+		fieldInfo := fieldInfoMap[typElem.Field(i).Name]
 		if fieldInfo.byteSize < 0 {
 			return errors.New("variant bytes before sizeof")
 		}
-		totalBytes += int(fieldInfo.byteSize)
 		if len(fieldInfo.tagSizeof) == 0 {
 			continue
 		}
@@ -127,13 +110,14 @@ func Unpack(v interface{}, bytes []byte) error {
 		field := valElem.FieldByName(fieldInfo.name)
 		length := uint64(0)
 		switch field.Kind() {
-		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			valBytes := bytes[fieldInfo.byteStart:fieldInfo.byteEnd]
-			if fieldInfo.byteSize < 8 {
-				valBytes = append(make([]byte, 8-fieldInfo.byteSize), valBytes...) // todo endian problem
+			val, err := byte2Uint(fieldInfo.tagEndian, valBytes)
+			if err != nil {
+				return err
 			}
-			length = fieldInfo.tagEndian.Uint64(valBytes)
-		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			length = uint64(val)
 		}
 		solvedField, value, err := solveSum(fieldValueMap, int(length))
 		if err != nil {
@@ -142,9 +126,14 @@ func Unpack(v interface{}, bytes []byte) error {
 		if solvedField != "" {
 			fieldInfoMap[solvedField].typeSize = value
 			fieldInfoMap[solvedField].byteSize = uint(value)
-			totalBytes += value
 		}
 		break
+	}
+
+	// check size
+	totalBytes := 0
+	for _, fieldInfo := range fieldInfoMap {
+		totalBytes += int(fieldInfo.byteSize)
 	}
 	if totalBytes != len(bytes) {
 		return errors.New("mismatch bytes")
