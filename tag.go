@@ -12,7 +12,7 @@ import (
 const (
 	tagItemKeyBigEndian    = "big"
 	tagItemKeyLittleEndian = "little"
-	tagItemKeySize         = "byteSize"
+	tagItemKeySize         = "size"
 	tagItemKeySizeof       = "sizeof"
 
 	reSize   = `^byteSize=(\d+)(B|W|DW|QW)$`

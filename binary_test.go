@@ -10,9 +10,9 @@ func TestBinary(t *testing.T) {
 	type packet struct {
 		Protocol uint16
 		Version  uint8
-		Length   uint16   `binary:"big,sizeof=Cmd+Data+Padding+CRC"`
-		Cmd      uint8    `binary:"byteSize=1B"`
-		Padding  struct{} `binary:"byteSize=1B"`
+		Length   uint16 `binary:"big,sizeof=Cmd+Data+Padding+CRC"`
+		Cmd      uint8
+		Padding  struct{} `binary:"size=1B"`
 		Data     []byte
 		CRC      uint16
 	}
@@ -30,8 +30,8 @@ func TestBinary(t *testing.T) {
 	assert.Nil(t, err)
 	fmt.Printf("%X\n", bytes)
 
-	// pkt2 := packet{}
-	// err = Unpack(&pkt2, bytes)
-	// assert.Nil(t, err)
+	pkt2 := packet{}
+	err = Unpack(&pkt2, bytes)
+	assert.Nil(t, err)
 	// assert.Equal(t, pkt1, pkt2)
 }
