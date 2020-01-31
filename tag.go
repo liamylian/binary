@@ -12,15 +12,18 @@ import (
 const (
 	tagItemKeyBigEndian    = "big"
 	tagItemKeyLittleEndian = "little"
-	tagItemKeySize         = "tagSize"
-	tagItemKeySizeof       = "tagSizeof"
+	tagItemKeySize         = "byteSize"
+	tagItemKeySizeof       = "sizeof"
+
+	reSize   = `^byteSize=(\d+)(B|W|DW|QW)$`
+	reSizeof = `^sizeof=((\w+\+)*\w+)$`
 )
 
 func getTagSize(value string) (uint, error) {
-	re := regexp.MustCompile(`tagSize=(\d+)(B|W|DW|QW)`)
+	re := regexp.MustCompile(reSize)
 	matches := re.FindStringSubmatch(value)
 	if len(matches) != 3 {
-		return 0, errors.New("binary: invalid field tag size value")
+		return 0, errors.New("binary: invalid field tag byteSize value")
 	}
 
 	num, err := strconv.Atoi(matches[1])
@@ -28,7 +31,7 @@ func getTagSize(value string) (uint, error) {
 		return 0, err
 	}
 	if num < 0 {
-		return 0, errors.New("binary: tag size value, must equal or greater than 0")
+		return 0, errors.New("binary: tag byteSize value, must equal or greater than 0")
 	}
 
 	var bytes int
@@ -46,7 +49,14 @@ func getTagSize(value string) (uint, error) {
 }
 
 func getTagSizeOf(value string) (fieldNames []string, err error) {
-	names := strings.Split(value, "+")
+	re := regexp.MustCompile(reSizeof)
+	matches := re.FindStringSubmatch(value)
+	if len(matches) != 3 {
+		err = errors.New("binary: invalid field tag sizeof value")
+		return
+	}
+
+	names := strings.Split(matches[1], "+")
 	for _, fieldName := range names {
 		field := strings.TrimSpace(fieldName)
 		if field != "" {
@@ -57,9 +67,8 @@ func getTagSizeOf(value string) (fieldNames []string, err error) {
 	return
 }
 
-func getTagInfo(tagValue string) (endian binary.ByteOrder, size uint, sizeof []string, err error) {
-	itemValues := strings.Split(tagValue, ",")
-	// todo
+func getTagInfo(value string) (endian binary.ByteOrder, size uint, sizeof []string, err error) {
+	itemValues := strings.Split(value, ",")
 	for _, itemValue := range itemValues {
 		itemValue = strings.TrimSpace(itemValue)
 		if itemValue == "" {

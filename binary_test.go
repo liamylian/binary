@@ -10,9 +10,9 @@ func TestBinary(t *testing.T) {
 	type packet struct {
 		Protocol uint16
 		Version  uint8
-		Length   uint16   `binary:"big,tagSizeof=Cmd+Data+Padding+CRC"`
-		Cmd      uint8    `binary:"tagSize=1B"`
-		Padding  struct{} `binary:"tagSize=7B"`
+		Length   uint16   `binary:"big,sizeof=Cmd+Data+Padding+CRC"`
+		Cmd      uint8    `binary:"byteSize=1B"`
+		Padding  struct{} `binary:"byteSize=1B"`
 		Data     []byte
 		CRC      uint16
 	}
@@ -20,10 +20,10 @@ func TestBinary(t *testing.T) {
 	pkt1 := packet{
 		Protocol: 1,
 		Version:  2,
-		Length:   6,
-		Cmd:      7,
-		Data:     []byte{8, 9, 10},
-		CRC:      11,
+		Length:   0, // 7
+		Cmd:      8,
+		Data:     []byte{9, 10, 11},
+		CRC:      12,
 	}
 
 	bytes, err := Pack(pkt1)

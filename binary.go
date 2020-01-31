@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"reflect"
 )
 
@@ -24,12 +25,12 @@ func Pack(v interface{}) ([]byte, error) {
 		field := typ.Field(i)
 		fieldValue := val.Field(i)
 		fieldInfo := fieldInfoMap[field.Name]
-		var bytes []byte
 
+		var bytes []byte
 		if fieldValue.Kind() == reflect.Struct {
-			bytes = make([]byte, fieldInfo.tagSize)
+			bytes = make([]byte, fieldInfo.byteSize)
 		} else {
-			bytes, err = pack(fieldValue, fieldInfo.tagEndian, fieldInfo.tagSize)
+			bytes, err = pack(fieldValue, fieldInfo.tagEndian, fieldInfo.byteSize)
 			if err != nil {
 				return nil, err
 			}
@@ -41,15 +42,20 @@ func Pack(v interface{}) ([]byte, error) {
 	resultBytes := buffer.Bytes()
 
 	for _, fieldInfo := range fieldInfoMap {
+		if len(fieldInfo.tagSizeof) == 0 {
+			continue
+		}
+
 		sumSize := uint64(0)
 		sumSizeLen := uint(8)
 		for _, otherFieldName := range fieldInfo.tagSizeof {
 			otherFieldInfo := fieldInfoMap[otherFieldName]
-			sumSize += uint64(otherFieldInfo.tagSize)
+			sumSize += uint64(otherFieldInfo.byteSize)
 		}
 		sumSizeBytes := make([]byte, sumSizeLen)
 		fieldInfo.tagEndian.PutUint64(sumSizeBytes, sumSize)
-		copy(resultBytes[fieldInfo.byteStart:fieldInfo.byteEnd], sumSizeBytes[sumSizeLen-fieldInfo.tagSize:])
+		fmt.Println(fieldInfo.name, fieldInfo.byteStart,  fieldInfo.byteSize, sumSizeLen - fieldInfo.byteSize)
+		copy(resultBytes[fieldInfo.byteStart:], sumSizeBytes[sumSizeLen-fieldInfo.byteSize:])
 	}
 
 	return resultBytes, nil

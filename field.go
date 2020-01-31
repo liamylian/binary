@@ -11,13 +11,16 @@ type fieldInfo struct {
 	tagEndian  binary.ByteOrder
 	tagSize    uint
 	tagSizeof  []string
-	actualSize int
+	typeSize   int
+	actualSize uint
+	byteSize   uint
 	byteStart  uint
 	byteEnd    uint
 }
 
 func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 	typ := reflect.TypeOf(v)
+	val := reflect.ValueOf(v)
 	if typ.Kind() != reflect.Struct {
 		return nil, errors.New("not a struct")
 	}
@@ -28,19 +31,25 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 	for i := 0; i < numField; i++ {
 		field := typ.Field(i)
 		fieldType := typ.Field(i).Type
+		fieldVal := val.Field(i)
 		fieldName := field.Name
 		tagEndian, tagSize, tagSizeof, err := getTagInfo(field.Tag.Get("binary"))
 		if err != nil {
 			return nil, err
 		}
 
-		actualSize := 0
+		typeSize := 0
+		actualSize := uint(0)
 		switch fieldType.Kind() {
 		case reflect.Bool,
 			reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 			reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Float32, reflect.Float64, reflect.Array, reflect.Slice:
-			actualSize = sizeof(fieldType)
+			reflect.Float32, reflect.Float64, reflect.Array:
+			typeSize = sizeof(fieldType)
+			actualSize = uint(typeSize)
+		case reflect.Slice:
+			typeSize = -1
+			actualSize = uint(sizeof(fieldType.Elem()) * fieldVal.Len())
 		case reflect.Struct:
 			if fieldType.NumField() > 0 {
 				return nil, errors.New("embedded none empty struct not supported")
@@ -48,18 +57,28 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		default:
 			return nil, errors.New("not supported kind")
 		}
+		byteSize := tagSize
+		if tagSize == 0 {
+			if typeSize > 0 {
+				byteSize = uint(typeSize)
+			} else {
+				byteSize = actualSize
+			}
+		}
 		byteStart := byteCursor
-		byteEnd := byteStart + tagSize
+		byteEnd := byteStart + byteSize
 		fieldInfoMap[fieldName] = &fieldInfo{
 			name:       fieldName,
 			tagEndian:  tagEndian,
 			tagSize:    tagSize,
 			tagSizeof:  tagSizeof,
-			actualSize: actualSize,
+			typeSize:   typeSize,
+			actualSize: uint(actualSize),
+			byteSize:   byteSize,
 			byteStart:  byteStart,
 			byteEnd:    byteEnd,
 		}
-		byteCursor += tagSize
+		byteCursor += byteSize
 	}
 
 	return fieldInfoMap, nil
