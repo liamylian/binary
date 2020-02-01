@@ -100,12 +100,10 @@ func Unpack(v interface{}, bytes []byte) error {
 		fieldValueMap := make(map[string]int)
 		for _, otherFieldName := range fieldInfo.tagSizeof {
 			otherFieldInfo := fieldInfoMap[otherFieldName]
-			if otherFieldInfo.typeSize < 0 {
+			if otherFieldInfo.byteSizeNeedResolve {
 				fieldValueMap[otherFieldInfo.name] = -1 // need solve
-			} else if otherFieldInfo.typeSize == 0 {
-				fieldValueMap[otherFieldInfo.name] = int(otherFieldInfo.tagPadding)
 			} else {
-				fieldValueMap[otherFieldInfo.name] = otherFieldInfo.typeSize
+				fieldValueMap[otherFieldInfo.name] = int(otherFieldInfo.byteSize)
 			}
 		}
 
@@ -126,7 +124,7 @@ func Unpack(v interface{}, bytes []byte) error {
 			return err
 		}
 		if solvedField != "" {
-			fieldInfoMap[solvedField].typeSize = value
+			fieldInfoMap[solvedField].byteSizeNeedResolve = false
 			fieldInfoMap[solvedField].byteSize = uint(value)
 		}
 		break

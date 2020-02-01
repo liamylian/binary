@@ -7,15 +7,15 @@ import (
 )
 
 type fieldInfo struct {
-	name         string
-	tagEndian    binary.ByteOrder
-	tagSizeof    []string
-	tagSizeofVal uint
-	tagPadding   uint
-	typeSize     int
-	byteSize     uint
-	byteStart    uint
-	byteEnd      uint
+	name                string
+	tagEndian           binary.ByteOrder
+	tagSizeof           []string
+	tagSizeofVal        uint
+	tagPadding          uint
+	byteSizeNeedResolve bool
+	byteSize            uint
+	byteStart           uint
+	byteEnd             uint
 }
 
 func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
@@ -43,23 +43,20 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		}
 
 		tagSizeofVal := 0
-		typeSize := 0
 		byteSize := uint(0)
+		byteSizeNeedResolve := false
 		switch fieldType.Kind() {
 		case reflect.Bool, reflect.Float32, reflect.Float64, reflect.Array:
 			tagSizeof = nil // ignore tag sizeof
 			tagPadding = 0  // ignore padding
-			typeSize = sizeof(fieldType)
-			byteSize = uint(typeSize)
+			byteSize = uint(sizeof(fieldType))
 		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			tagPadding = 0 // ignore padding
-			typeSize = sizeof(fieldType)
-			byteSize = uint(typeSize)
+			byteSize = uint(sizeof(fieldType))
 			tagSizeofVal = int(fieldVal.Uint())
 		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			tagPadding = 0 // ignore padding
-			typeSize = sizeof(fieldType)
-			byteSize = uint(typeSize)
+			byteSize = uint(sizeof(fieldType))
 			tagSizeofVal = int(fieldVal.Uint())
 			tagSizeofVal = int(fieldVal.Int())
 			if tagSizeofVal <= 0 {
@@ -68,14 +65,13 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		case reflect.Slice:
 			tagSizeof = nil // ignore tag sizeof
 			tagPadding = 0  // ignore padding
-			typeSize = -1   // unknown type size that need solve
+			byteSizeNeedResolve = true
 			byteSize = uint(sizeof(fieldType.Elem()) * fieldVal.Len())
 		case reflect.Struct:
 			if fieldType.NumField() > 0 {
 				return nil, errors.New("embedded none empty struct not supported")
 			}
 			tagSizeof = nil // ignore tag sizeof
-			typeSize = 0    // unknown type size, but specified by padding
 			byteSize = tagPadding
 		default:
 			return nil, errors.New("not supported kind")
@@ -88,7 +84,7 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 			tagSizeof:    tagSizeof,
 			tagSizeofVal: uint(tagSizeofVal),
 			tagPadding:   tagPadding,
-			typeSize:     typeSize,
+			byteSizeNeedResolve: byteSizeNeedResolve,
 			byteSize:     byteSize,
 			byteStart:    byteStart,
 			byteEnd:      byteEnd,
