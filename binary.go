@@ -100,10 +100,12 @@ func Unpack(v interface{}, bytes []byte) error {
 		fieldValueMap := make(map[string]int)
 		for _, otherFieldName := range fieldInfo.tagSizeof {
 			otherFieldInfo := fieldInfoMap[otherFieldName]
-			if otherFieldInfo.typeSize >= 0 {
-				fieldValueMap[otherFieldInfo.name] = otherFieldInfo.typeSize
-			} else {
+			if otherFieldInfo.typeSize < 0 {
 				fieldValueMap[otherFieldInfo.name] = -1 // need solve
+			} else if otherFieldInfo.typeSize == 0 {
+				fieldValueMap[otherFieldInfo.name] = int(otherFieldInfo.tagPadding)
+			} else {
+				fieldValueMap[otherFieldInfo.name] = otherFieldInfo.typeSize
 			}
 		}
 
@@ -132,12 +134,42 @@ func Unpack(v interface{}, bytes []byte) error {
 
 	// check size
 	totalBytes := 0
-	for _, fieldInfo := range fieldInfoMap {
+	byteCursor := 0
+	for i := 0; i < numField; i++ {
+		fieldInfo := fieldInfoMap[typElem.Field(i).Name]
+		fieldInfo.byteStart = uint(byteCursor)
+		fieldInfo.byteEnd = fieldInfo.byteStart + fieldInfo.byteSize
 		totalBytes += int(fieldInfo.byteSize)
+		byteCursor += int(fieldInfo.byteSize)
 	}
 	if totalBytes != len(bytes) {
 		return errors.New("mismatch bytes")
 	}
 
+	// unpack
+	for i := 0; i < numField; i++ {
+		fieldInfo := fieldInfoMap[typElem.Field(i).Name]
+		field := valElem.Field(i)
+		if field.Kind() == reflect.Struct {
+			continue
+		}
+		if err := unpack(field, bytes[fieldInfo.byteStart:fieldInfo.byteEnd], fieldInfo.tagEndian); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func unpack(v reflect.Value, data []byte, endian binary.ByteOrder) error {
+	buffer := bytes.NewBuffer(data)
+	if v.Kind() == reflect.Slice {
+		eleSize := v.Type().Elem().Size()
+		sliceLen := len(data) / int(eleSize)
+		slice := reflect.MakeSlice(v.Type(), sliceLen, sliceLen)
+		v.Addr().Elem().Set(slice)
+	}
+
+	err := binary.Read(buffer, endian, v.Addr().Interface())
+	return err
 }
