@@ -37,57 +37,54 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		fieldType := typElem.Field(i).Type
 		fieldVal := valElem.Field(i)
 		fieldName := field.Name
-		tagEndian, tagPadding, tagSizeof, err := getTagInfo(field.Tag.Get("binary"))
+		tagInfoEndian, tagInfoPadding, tagInfoSizeof, err := getTagInfo(field.Tag.Get("binary"))
 		if err != nil {
 			return nil, err
 		}
 
+		var tagSizeof []string // ignore tag `sizeof`
 		tagSizeofVal := 0
+		tagEndian := tagInfoEndian
+		tagPadding := uint(0) // ignore tag `padding`
 		byteSize := uint(0)
 		byteSizeNeedResolve := false
 		switch fieldType.Kind() {
 		case reflect.Bool, reflect.Float32, reflect.Float64, reflect.Array:
-			tagSizeof = nil // ignore tag sizeof
-			tagPadding = 0  // ignore padding
 			byteSize = uint(sizeof(fieldType))
-		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			tagPadding = 0 // ignore padding
+		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64: // support tag `sizeof`
 			byteSize = uint(sizeof(fieldType))
+			tagSizeof = tagInfoSizeof
 			tagSizeofVal = int(fieldVal.Uint())
-		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			tagPadding = 0 // ignore padding
+		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64: // support tag `sizeof`
 			byteSize = uint(sizeof(fieldType))
-			tagSizeofVal = int(fieldVal.Uint())
-			tagSizeofVal = int(fieldVal.Int())
 			if tagSizeofVal <= 0 {
 				return nil, errors.New("tag sizeof value < 0")
 			}
+			tagSizeof = tagInfoSizeof
+			tagSizeofVal = int(fieldVal.Int())
 		case reflect.Slice:
-			tagSizeof = nil // ignore tag sizeof
-			tagPadding = 0  // ignore padding
-			byteSizeNeedResolve = true
 			byteSize = uint(sizeof(fieldType.Elem()) * fieldVal.Len())
-		case reflect.Struct:
+			byteSizeNeedResolve = true
+		case reflect.Struct: // support tag `padding`
 			if fieldType.NumField() > 0 {
 				return nil, errors.New("embedded none empty struct not supported")
 			}
-			tagSizeof = nil // ignore tag sizeof
-			byteSize = tagPadding
+			byteSize = tagInfoPadding
 		default:
 			return nil, errors.New("not supported kind")
 		}
 		byteStart := byteCursor
 		byteEnd := byteStart + byteSize
 		fieldInfoMap[fieldName] = &fieldInfo{
-			name:         fieldName,
-			tagEndian:    tagEndian,
-			tagSizeof:    tagSizeof,
-			tagSizeofVal: uint(tagSizeofVal),
-			tagPadding:   tagPadding,
+			name:                fieldName,
+			tagEndian:           tagEndian,
+			tagSizeof:           tagSizeof,
+			tagSizeofVal:        uint(tagSizeofVal),
+			tagPadding:          tagPadding,
 			byteSizeNeedResolve: byteSizeNeedResolve,
-			byteSize:     byteSize,
-			byteStart:    byteStart,
-			byteEnd:      byteEnd,
+			byteSize:            byteSize,
+			byteStart:           byteStart,
+			byteEnd:             byteEnd,
 		}
 		byteCursor += byteSize
 	}
