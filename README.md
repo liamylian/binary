@@ -4,11 +4,11 @@
 
 ```go
 packet := struct {
-    Protocol uint16 `binary:"big"` // endian, `big` or `little`
-    Length   uint16 `binary:"sizeof=Cmd+Data+Padding+CRC"` // sizeof (only support integer, others will be ignored), auto calculate size of fields
+    Protocol uint16 `binary:"big"`
+    Length   uint16 `binary:"sizeof=Cmd+Data+Padding+CRC"` 
     Cmd      uint8
     Data     []byte
-    Padding  struct{} `binary:"padding=1B"` // padding (only support empty struct, others will be ignored), specify the size of padding
+    Padding  [2]byte
     CRC      uint16
 } {}
 
@@ -18,10 +18,9 @@ err = Unpack(&packet, bytes)
 
 *tags:*
 
-- big
-- little
-- sizeof
-- size
+- `big`, big endian
+- `little`, little endian
+- `sizeof`, auto calculate size of fields, and put result into field (field must be integer).
 
 *supported types:*
 
@@ -37,5 +36,5 @@ err = Unpack(&packet, bytes)
 - int16
 - int32
 - int64
-- empty struct
-- array or slice of above
+- array
+- slice

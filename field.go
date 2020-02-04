@@ -37,7 +37,7 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		fieldType := typElem.Field(i).Type
 		fieldVal := valElem.Field(i)
 		fieldName := field.Name
-		tagInfoEndian, tagInfoPadding, tagInfoSizeof, err := getTagInfo(field.Tag.Get("binary"))
+		tagInfoEndian, tagInfoSizeof, err := getTagInfo(field.Tag.Get("binary"))
 		if err != nil {
 			return nil, err
 		}
@@ -45,7 +45,6 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		var tagSizeof []string // ignore tag `sizeof`
 		tagSizeofVal := 0
 		tagEndian := tagInfoEndian
-		tagPadding := uint(0) // ignore tag `padding`
 		byteSize := uint(0)
 		byteSizeNeedResolve := false
 		switch fieldType.Kind() {
@@ -65,11 +64,6 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 		case reflect.Slice:
 			byteSize = uint(sizeof(fieldType.Elem()) * fieldVal.Len())
 			byteSizeNeedResolve = true
-		case reflect.Struct: // support tag `padding`
-			if fieldType.NumField() > 0 {
-				return nil, errors.New("embedded none empty struct not supported")
-			}
-			byteSize = tagInfoPadding
 		default:
 			return nil, errors.New("not supported kind")
 		}
@@ -80,7 +74,6 @@ func getFieldInfo(v interface{}) (map[string]*fieldInfo, error) {
 			tagEndian:           tagEndian,
 			tagSizeof:           tagSizeof,
 			tagSizeofVal:        uint(tagSizeofVal),
-			tagPadding:          tagPadding,
 			byteSizeNeedResolve: byteSizeNeedResolve,
 			byteSize:            byteSize,
 			byteStart:           byteStart,
